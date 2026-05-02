@@ -1321,7 +1321,7 @@ const CONFIG = {
   TOKEN: localStorage.getItem('kobo_token') || null,
   KOBO_BASE: localStorage.getItem('kobo_server') || 'https://kf.kobotoolbox.org',
   ASSET_UID: localStorage.getItem('asset_uid') || 'aFPhq8BHNDSd2SBKUAbP4y',
-  PROXY_URL: 'https://drdip-ii-kobo-proxy.vercel.app/api/kobo-proxy',
+  PROXY_URL: 'https://drdip-kobo-4sctx48z7-muhamedfarahcd-gmailcoms-projects.vercel.app/api/kobo-proxy',
   REGION_FILTER: 'Somali'
 };
 
@@ -1429,38 +1429,43 @@ function setupEventListeners() {
 async function loadData() {
   try {
     setLoading(true);
-    updateStatus('Connecting via proxy...', false);
-    
-    // Build request to Vercel proxy
-    const params = new URLSearchParams({
-      token: CONFIG.TOKEN,
-      server: CONFIG.KOBO_BASE,
-      asset: CONFIG.ASSET_UID
+    updateStatus('Connecting to KoboToolbox...', false);
+
+    // DIRECT API CALL - No proxy needed
+    const url = `${CONFIG.KOBO_BASE}/api/v2/assets/${CONFIG.ASSET_UID}/data.json?limit=30000`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Token ${CONFIG.TOKEN}`,
+        'Accept': 'application/json'
+      }
     });
 
-    const response = await fetch(`${CONFIG.PROXY_URL}?${params}`);
-    
+    if (response.status === 401) {
+      throw new Error('Authentication failed. Check your token.');
+    }
+    if (response.status === 404) {
+      throw new Error('Form not found. Check your Asset UID.');
+    }
     if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || err.message || `HTTP ${response.status}`);
+      throw new Error(`Server error: HTTP ${response.status}`);
     }
 
     const data = await response.json();
-    ALL_DATA = data.results || data;
+    ALL_DATA = data.results || [];
 
-    // FILTER TO SOMALI REGION ONLY
-    ALL_DATA = ALL_DATA.filter(record => {
-      const region = detectField(record, FIELD_ALIASES['woreda']);
-      return region && (region.toLowerCase().includes('somali') || region.toLowerCase().includes('filtu') || region.toLowerCase().includes('kismayo'));
-    });
+    if (ALL_DATA.length === 0) {
+      throw new Error('No records found. Check your Asset UID.');
+    }
 
-    updateStatus('Connected via proxy', true);
+    updateStatus('Connected', true);
     applyFilters();
-    showAlert('success', `✓ Loaded ${ALL_DATA.length} records from Somali Region via secure proxy`);
+    showAlert('success', `✓ Loaded ${ALL_DATA.length} total records`);
   } catch (error) {
-    updateStatus('Proxy connection failed', false);
+    updateStatus('Connection failed', false);
     showAlert('error', `Error: ${error.message}`);
-    console.error('Proxy error:', error);
+    console.error('Load error:', error);
   } finally {
     setLoading(false);
   }
@@ -2377,4 +2382,3 @@ function setLoading(show) {
 
 </body>
 </html>
-
