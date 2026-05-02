@@ -1429,34 +1429,36 @@ function setupEventListeners() {
 async function loadData() {
   try {
     setLoading(true);
-    updateStatus('Connecting to KoboToolbox...', false);
+    updateStatus('Connecting via proxy...', false);
 
-    // DIRECT API CALL - No proxy needed
-    const url = `${CONFIG.KOBO_BASE}/api/v2/assets/${CONFIG.ASSET_UID}/data.json?limit=30000`;
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Token ${CONFIG.TOKEN}`,
-        'Accept': 'application/json'
-      }
+    // USE PROXY - required for CORS
+    const params = new URLSearchParams({
+      token: CONFIG.TOKEN,
+      server: CONFIG.KOBO_BASE,
+      asset: CONFIG.ASSET_UID
     });
 
-    if (response.status === 401) {
-      throw new Error('Authentication failed. Check your token.');
-    }
-    if (response.status === 404) {
-      throw new Error('Form not found. Check your Asset UID.');
-    }
+    const proxyUrl = `${CONFIG.PROXY_URL}?${params.toString()}`;
+    console.log('Fetching via proxy:', CONFIG.PROXY_URL);
+
+    const response = await fetch(proxyUrl);
+
     if (!response.ok) {
-      throw new Error(`Server error: HTTP ${response.status}`);
+      let errMsg = `HTTP ${response.status}`;
+      try {
+        const errData = await response.json();
+        errMsg = errData.error || errData.message || errMsg;
+      } catch(e) {}
+      if (response.status === 401) throw new Error('Authentication failed. Check your token.');
+      if (response.status === 404) throw new Error('Form not found. Check your Asset UID.');
+      throw new Error(errMsg);
     }
 
     const data = await response.json();
     ALL_DATA = data.results || [];
 
     if (ALL_DATA.length === 0) {
-      throw new Error('No records found. Check your Asset UID.');
+      throw new Error('No records found in this form.');
     }
 
     updateStatus('Connected', true);
